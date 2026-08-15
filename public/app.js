@@ -150,8 +150,8 @@ async function runDeploy(collector) {
 
 function formatDeployResult(payload, result) {
   if (payload.deployMode === 'update') return `${result.projectName} 代码同步完成`;
-  if (result.domain?.hostname) return `https://${result.domain.hostname}/login 部署完成，登录密码(UUID): ${result.uuid}`;
-  return `${result.projectName} 部署完成，登录密码(UUID): ${result.uuid}`;
+  const 地址 = result.domain?.hostname ? `https://${result.domain.hostname}/login` : `${result.projectName}.pages.dev/login`;
+  return `${地址} 部署完成，登录密码(ADMIN): ${result.admin}，节点 UUID: ${result.uuid}`;
 }
 
 async function loadResources() {
@@ -226,6 +226,8 @@ function collectAdvancedPayload() {
     deployType: $('deployType').value,
     projectName: $('projectName').value.trim() || randomName('edge'),
     uuid: $('uuid').value.trim() || crypto.randomUUID(),
+    admin: $('adminPassword').value.trim(),
+    key: $('secretKey').value.trim(),
     kvTitle: $('kvTitle').value.trim() || randomName('store'),
     kvId: $('kvId').value,
     hostname,

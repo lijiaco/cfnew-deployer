@@ -2,6 +2,8 @@ const 接口地址 = 'https://api.cloudflare.com/client/v4';
 const 兼容日期 = '2025-11-04';
 const 绑定名 = 'KV';
 const UUID变量名 = 'UUID';
+const ADMIN变量名 = 'ADMIN';
+const KEY变量名 = 'KEY';
 const 源码远程基础 = 'https://raw.githubusercontent.com/cmliu/edgetunnel/main';
 const 源码文件 = '_worker.js';
 
@@ -59,6 +61,8 @@ async function 部署(数据, context) {
   const 日志 = [];
   const 记录 = 文本 => 日志.push(`[${new Date().toLocaleTimeString()}] ${文本}`);
   const uuid = 数据.uuid || crypto.randomUUID();
+  const admin密码 = String(数据.admin || '').trim() || 生成随机密码();
+  const 加密秘钥 = String(数据.key || '').trim() || 生成随机密码();
   const 操作模式 = 数据.deployMode === 'update' ? 'update' : 'create';
   const 原始项目名 = String(数据.projectName || '').trim();
   const 项目名 = 操作模式 === 'update' ? 原始项目名 : 清理项目名(原始项目名 || 生成随机名称('edge'));
@@ -90,6 +94,8 @@ async function 部署(数据, context) {
       accountId: 数据.accountId,
       scriptName: 项目名,
       uuid,
+      admin: admin密码,
+      key: 加密秘钥,
       kvId: 命名空间.id,
       enableWorkersDev: !!数据.enableWorkersDev
     }, context, 记录);
@@ -98,6 +104,8 @@ async function 部署(数据, context) {
       accountId: 数据.accountId,
       projectName: 项目名,
       uuid,
+      admin: admin密码,
+      key: 加密秘钥,
       kvId: 命名空间.id
     }, context, 记录);
   }
@@ -116,11 +124,15 @@ async function 部署(数据, context) {
     deployType: 部署方式,
     projectName: 项目名
   }, 记录);
+  记录(`ADMIN 登录密码: ${admin密码}`);
+  记录(`KEY 加密秘钥: ${加密秘钥}`);
   记录('部署完成');
   return {
     deployType: 部署方式,
     projectName: 项目名,
     uuid,
+    admin: admin密码,
+    key: 加密秘钥,
     kv: { id: 命名空间.id, title: 命名空间.title || 数据.kvTitle || '' },
     domain,
     domains,
@@ -234,6 +246,8 @@ async function 部署Worker(凭据, 选项, context, 记录) {
     compatibility_date: 兼容日期,
     bindings: [
       { type: 'plain_text', name: UUID变量名, text: 选项.uuid },
+      { type: 'plain_text', name: ADMIN变量名, text: 选项.admin },
+      { type: 'plain_text', name: KEY变量名, text: 选项.key },
       { type: 'kv_namespace', name: 绑定名, namespace_id: 选项.kvId }
     ]
   };
@@ -399,7 +413,11 @@ async function 创建或更新Pages项目(凭据, 选项, 记录) {
 function 生成Pages配置(选项) {
   const 单项 = {
     compatibility_date: 兼容日期,
-    env_vars: { [UUID变量名]: { type: 'plain_text', value: 选项.uuid } },
+    env_vars: {
+      [UUID变量名]: { type: 'plain_text', value: 选项.uuid },
+      [ADMIN变量名]: { type: 'plain_text', value: 选项.admin },
+      [KEY变量名]: { type: 'plain_text', value: 选项.key }
+    },
     kv_namespaces: { [绑定名]: { namespace_id: 选项.kvId } }
   };
   return { production: 单项, preview: 单项 };
@@ -412,6 +430,8 @@ function 合并Pages配置(已有, 选项) {
     输出[名称].compatibility_date = 兼容日期;
     输出[名称].env_vars = 输出[名称].env_vars || {};
     输出[名称].env_vars[UUID变量名] = { type: 'plain_text', value: 选项.uuid };
+    输出[名称].env_vars[ADMIN变量名] = { type: 'plain_text', value: 选项.admin };
+    输出[名称].env_vars[KEY变量名] = { type: 'plain_text', value: 选项.key };
     输出[名称].kv_namespaces = 输出[名称].kv_namespaces || {};
     输出[名称].kv_namespaces[绑定名] = { namespace_id: 选项.kvId };
   }
@@ -611,4 +631,8 @@ function 清理项目名(名称) {
 
 function 生成随机名称(prefix) {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function 生成随机密码() {
+  return crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 }

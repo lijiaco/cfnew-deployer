@@ -49,7 +49,7 @@
           <div class="panel-head">
             <div>
               <h2>2. 一键部署</h2>
-              <p>默认使用 Pages 部署 cmliu/edgetunnel。域名绑定是可选项，开启后自动生成随机子域名。UUID 同时是管理页登录密码。</p>
+              <p>默认使用 Pages 部署 cmliu/edgetunnel。域名绑定是可选项，开启后自动生成随机子域名。管理页登录密码（ADMIN）与节点 UUID 相互独立，均自动随机生成。</p>
             </div>
             <button id="backToLogin" class="secondary">返回登录</button>
           </div>
@@ -123,8 +123,16 @@
               <input id="projectName" />
             </label>
             <label class="span-two">
-              <span>UUID</span>
+              <span>UUID（节点凭据，非登录密码）</span>
               <input id="uuid" />
+            </label>
+            <label>
+              <span>ADMIN（管理页登录密码）</span>
+              <input id="adminPassword" placeholder="留空自动随机" />
+            </label>
+            <label>
+              <span>KEY（加密秘钥/快速订阅路径）</span>
+              <input id="secretKey" placeholder="留空自动随机" />
             </label>
             <label>
               <span>KV 名称</span>
