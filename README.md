@@ -40,13 +40,13 @@ npm start
 - 用户填写 Cloudflare 邮箱和 Global API Key
 - 自动读取账户和可绑定域名
 - 默认随机生成项目名称、KV 名称和可选子域名，不使用固定业务前缀
-- 自动生成 UUID
-- 自动创建或复用 KV，并绑定为 `C`
+- 自动生成 UUID（v4），同时作为管理页默认登录密码
+- 自动创建或复用 KV，并绑定为 `KV`
 - 支持读取现有 Worker / Pages / KV 后更新部署
 - 更新部署只同步代码，不修改 UUID、KV、域名或项目配置
 - Worker 部署
 - Pages 部署
-- 部署时实时从 `byJoey/cfnew` 的 `main` 分支拉取明文源或混淆源
+- 部署时实时从 `cmliu/edgetunnel` 的 `main` 分支拉取 `_worker.js`
 - Worker 自定义域名或 Route 绑定
 - Pages 自定义域名绑定
 

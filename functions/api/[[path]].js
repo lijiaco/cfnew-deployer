@@ -1,7 +1,9 @@
 const 接口地址 = 'https://api.cloudflare.com/client/v4';
-const 兼容日期 = '2026-01-20';
-const 绑定名 = 'C';
-const 源码远程基础 = 'https://raw.githubusercontent.com/byJoey/cfnew/main';
+const 兼容日期 = '2025-11-04';
+const 绑定名 = 'KV';
+const UUID变量名 = 'UUID';
+const 源码远程基础 = 'https://raw.githubusercontent.com/cmliu/edgetunnel/main';
+const 源码文件 = '_worker.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -60,41 +62,33 @@ async function 部署(数据, context) {
   const 操作模式 = 数据.deployMode === 'update' ? 'update' : 'create';
   const 原始项目名 = String(数据.projectName || '').trim();
   const 项目名 = 操作模式 === 'update' ? 原始项目名 : 清理项目名(原始项目名 || 生成随机名称('edge'));
-  const 模式 = 数据.sourceMode === 'plain' ? 'plain' : 'encoded';
   const 部署方式 = 数据.deployType === 'worker' ? 'worker' : 'pages';
   记录(`准备${操作模式 === 'update' ? '更新' : '部署'} ${部署方式 === 'pages' ? 'Pages' : 'Worker'}: ${项目名}`);
-  记录(`部署源: ${模式 === 'plain' ? '明文源吗' : '少年你相信光吗'}，实时联网拉取`);
+  记录(`部署源: cmliu/edgetunnel ${源码文件}，实时联网拉取`);
   if (操作模式 === 'update') {
     if (部署方式 === 'worker') {
       await 同步Worker代码(数据.credentials, {
         accountId: 数据.accountId,
-        scriptName: 项目名,
-        sourceMode: 模式
+        scriptName: 项目名
       }, context, 记录);
     } else {
       await 同步Pages代码(数据.credentials, {
         accountId: 数据.accountId,
-        projectName: 项目名,
-        sourceMode: 模式
+        projectName: 项目名
       }, context, 记录);
     }
     记录('更新模式只同步代码，未修改 UUID、KV、域名或项目配置');
-    return { deployType: 部署方式, projectName: 项目名, sourceMode: 模式, logs: 日志 };
+    return { deployType: 部署方式, projectName: 项目名, logs: 日志 };
   }
   const 命名空间 = await 获取或创建KV(数据.credentials, 数据.accountId, {
     id: 数据.kvId,
     title: 数据.kvTitle || 生成随机名称('store')
   }, 记录);
-  if (命名空间.created) {
-    await 初始化KV(数据.credentials, 数据.accountId, 命名空间.id, 记录);
-  } else {
-    记录('复用现有 KV，保留原配置');
-  }
+  if (!命名空间.created) 记录('复用现有 KV，保留原配置');
   if (部署方式 === 'worker') {
     await 部署Worker(数据.credentials, {
       accountId: 数据.accountId,
       scriptName: 项目名,
-      sourceMode: 模式,
       uuid,
       kvId: 命名空间.id,
       enableWorkersDev: !!数据.enableWorkersDev
@@ -103,7 +97,6 @@ async function 部署(数据, context) {
     await 部署Pages(数据.credentials, {
       accountId: 数据.accountId,
       projectName: 项目名,
-      sourceMode: 模式,
       uuid,
       kvId: 命名空间.id
     }, context, 记录);
@@ -127,7 +120,6 @@ async function 部署(数据, context) {
   return {
     deployType: 部署方式,
     projectName: 项目名,
-    sourceMode: 模式,
     uuid,
     kv: { id: 命名空间.id, title: 命名空间.title || 数据.kvTitle || '' },
     domain,
@@ -147,7 +139,6 @@ async function 补全部署默认值(数据) {
     输出.accountName = accounts[0].name;
   }
   if (!输出.deployType) 输出.deployType = 'pages';
-  if (!输出.sourceMode) 输出.sourceMode = 'encoded';
   if (输出.deployMode === 'update') return 输出;
   if (输出.autoDomain && !输出.hostname) {
     zones = await 调用接口(输出.credentials, '/zones?status=active&per_page=100');
@@ -236,13 +227,13 @@ function 校验部署参数(数据) {
 }
 
 async function 部署Worker(凭据, 选项, context, 记录) {
-  const 代码 = await 读取源代码(选项.sourceMode, context);
+  const 代码 = await 读取源代码(context);
   const 表单 = new FormData();
   const 元数据 = {
     main_module: 'worker.js',
     compatibility_date: 兼容日期,
     bindings: [
-      { type: 'plain_text', name: 'u', text: 选项.uuid },
+      { type: 'plain_text', name: UUID变量名, text: 选项.uuid },
       { type: 'kv_namespace', name: 绑定名, namespace_id: 选项.kvId }
     ]
   };
@@ -260,7 +251,7 @@ async function 部署Worker(凭据, 选项, context, 记录) {
 }
 
 async function 同步Worker代码(凭据, 选项, context, 记录) {
-  const 代码 = await 读取源代码(选项.sourceMode, context);
+  const 代码 = await 读取源代码(context);
   const 设置 = await 读取Worker设置(凭据, 选项.accountId, 选项.scriptName);
   const 元数据 = 生成保留Worker元数据(设置);
   const 表单 = new FormData();
@@ -305,7 +296,7 @@ function 生成保留Worker元数据(设置) {
 
 async function 部署Pages(凭据, 选项, context, 记录) {
   const 项目 = await 创建或更新Pages项目(凭据, 选项, 记录);
-  const 代码 = await 读取源代码(选项.sourceMode, context);
+  const 代码 = await 读取源代码(context);
   await 上传Pages部署(凭据, 选项.accountId, 选项.projectName, 代码, 记录);
   记录(`Pages 项目已配置: ${项目.name}`);
   记录('Pages 部署上传完成');
@@ -318,7 +309,7 @@ async function 同步Pages代码(凭据, 选项, context, 记录) {
     if (String(错误.message).includes('404')) throw new Error(`找不到现有 Pages 项目: ${选项.projectName}`);
     throw 错误;
   }
-  const 代码 = await 读取源代码(选项.sourceMode, context);
+  const 代码 = await 读取源代码(context);
   记录('Pages 更新模式不修改 KV/变量/域名配置');
   await 上传Pages部署(凭据, 选项.accountId, 选项.projectName, 代码, 记录);
   记录('Pages 代码同步完成');
@@ -408,7 +399,7 @@ async function 创建或更新Pages项目(凭据, 选项, 记录) {
 function 生成Pages配置(选项) {
   const 单项 = {
     compatibility_date: 兼容日期,
-    env_vars: { u: { type: 'plain_text', value: 选项.uuid } },
+    env_vars: { [UUID变量名]: { type: 'plain_text', value: 选项.uuid } },
     kv_namespaces: { [绑定名]: { namespace_id: 选项.kvId } }
   };
   return { production: 单项, preview: 单项 };
@@ -420,7 +411,7 @@ function 合并Pages配置(已有, 选项) {
     输出[名称] = 输出[名称] || {};
     输出[名称].compatibility_date = 兼容日期;
     输出[名称].env_vars = 输出[名称].env_vars || {};
-    输出[名称].env_vars.u = { type: 'plain_text', value: 选项.uuid };
+    输出[名称].env_vars[UUID变量名] = { type: 'plain_text', value: 选项.uuid };
     输出[名称].kv_namespaces = 输出[名称].kv_namespaces || {};
     输出[名称].kv_namespaces[绑定名] = { namespace_id: 选项.kvId };
   }
@@ -450,20 +441,6 @@ async function 获取或创建KV(凭据, accountId, 选项, 记录) {
   });
   记录(`创建 KV: ${标题}`);
   return { ...创建结果, title: 标题, created: true };
-}
-
-async function 初始化KV(凭据, accountId, namespaceId, 记录) {
-  await 调用原始接口(凭据, `/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/c`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    body: '{}'
-  });
-  await 调用原始接口(凭据, `/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/c_ver`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    body: String(Date.now())
-  });
-  记录('KV 已写入初始配置');
 }
 
 async function 启用WorkersDev(凭据, accountId, scriptName) {
@@ -533,9 +510,8 @@ async function 列出绑定域名(凭据, 选项, 记录) {
   }
 }
 
-async function 读取源代码(mode, context) {
-  const 文件名 = mode === 'plain' ? '明文源吗' : '少年你相信光吗';
-  const 远程地址 = `${源码远程基础}/${encodeURIComponent(文件名)}?t=${Date.now()}`;
+async function 读取源代码(context) {
+  const 远程地址 = `${源码远程基础}/${源码文件}?t=${Date.now()}`;
   const 响应 = await fetch(远程地址, {
     headers: {
       'Cache-Control': 'no-cache',

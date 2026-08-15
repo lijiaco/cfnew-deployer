@@ -9,10 +9,12 @@ import { randomUUID } from 'node:crypto';
 const 端口 = Number(process.env.PORT || 8790);
 const 静态目录 = resolve(import.meta.dirname, 'public');
 const 源码目录 = resolve(import.meta.dirname, 'public', 'sources');
-const 源码远程基础 = 'https://raw.githubusercontent.com/byJoey/cfnew/main';
+const 源码远程基础 = 'https://raw.githubusercontent.com/cmliu/edgetunnel/main';
+const 源码文件 = '_worker.js';
 const 接口地址 = 'https://api.cloudflare.com/client/v4';
-const 兼容日期 = '2026-01-20';
-const 绑定名 = 'C';
+const 兼容日期 = '2025-11-04';
+const 绑定名 = 'KV';
+const UUID变量名 = 'UUID';
 
 const 服务 = createServer(async (请求, 响应) => {
   try {
@@ -72,29 +74,25 @@ async function 部署(数据) {
   const 操作模式 = 数据.deployMode === 'update' ? 'update' : 'create';
   const 原始项目名 = String(数据.projectName || '').trim();
   const 项目名 = 操作模式 === 'update' ? 原始项目名 : 清理项目名(原始项目名 || 生成随机名称('edge'));
-  const 模式 = 数据.sourceMode === 'plain' ? 'plain' : 'encoded';
   const 部署方式 = 数据.deployType === 'worker' ? 'worker' : 'pages';
   记录(`准备${操作模式 === 'update' ? '更新' : '部署'} ${部署方式 === 'pages' ? 'Pages' : 'Worker'}: ${项目名}`);
-  记录(`部署源: ${模式 === 'plain' ? '明文源吗' : '少年你相信光吗'}，实时联网拉取`);
+  记录(`部署源: cmliu/edgetunnel ${源码文件}，实时联网拉取`);
   if (操作模式 === 'update') {
     if (部署方式 === 'worker') {
       await 同步Worker代码(数据.credentials, {
         accountId: 数据.accountId,
-        scriptName: 项目名,
-        sourceMode: 模式
+        scriptName: 项目名
       }, 记录);
     } else {
       await 同步Pages代码(数据.credentials, {
         accountId: 数据.accountId,
-        projectName: 项目名,
-        sourceMode: 模式
+        projectName: 项目名
       }, 记录);
     }
     记录('更新模式只同步代码，未修改 UUID、KV、域名或项目配置');
     return {
       deployType: 部署方式,
       projectName: 项目名,
-      sourceMode: 模式,
       logs: 日志
     };
   }
@@ -102,16 +100,11 @@ async function 部署(数据) {
     id: 数据.kvId,
     title: 数据.kvTitle || 生成随机名称('store')
   }, 记录);
-  if (命名空间.created) {
-    await 初始化KV(数据.credentials, 数据.accountId, 命名空间.id, 记录);
-  } else {
-    记录('复用现有 KV，保留原配置');
-  }
+  if (!命名空间.created) 记录('复用现有 KV，保留原配置');
   if (部署方式 === 'worker') {
     await 部署Worker(数据.credentials, {
       accountId: 数据.accountId,
       scriptName: 项目名,
-      sourceMode: 模式,
       uuid,
       kvId: 命名空间.id,
       enableWorkersDev: !!数据.enableWorkersDev
@@ -120,7 +113,6 @@ async function 部署(数据) {
     await 部署Pages(数据.credentials, {
       accountId: 数据.accountId,
       projectName: 项目名,
-      sourceMode: 模式,
       uuid,
       kvId: 命名空间.id
     }, 记录);
@@ -144,7 +136,6 @@ async function 部署(数据) {
   return {
     deployType: 部署方式,
     projectName: 项目名,
-    sourceMode: 模式,
     uuid,
     kv: { id: 命名空间.id, title: 命名空间.title || 数据.kvTitle || '' },
     domain,
@@ -164,7 +155,6 @@ async function 补全部署默认值(数据) {
     输出.accountName = accounts[0].name;
   }
   if (!输出.deployType) 输出.deployType = 'pages';
-  if (!输出.sourceMode) 输出.sourceMode = 'encoded';
   if (输出.deployMode === 'update') return 输出;
   if (输出.autoDomain && !输出.hostname) {
     zones = await 调用接口(输出.credentials, '/zones?status=active&per_page=100');
@@ -259,13 +249,13 @@ function 校验部署参数(数据) {
 }
 
 async function 部署Worker(凭据, 选项, 记录) {
-  const 代码 = await 读取源代码(选项.sourceMode);
+  const 代码 = await 读取源代码();
   const 表单 = new FormData();
   const 元数据 = {
     main_module: 'worker.js',
     compatibility_date: 兼容日期,
     bindings: [
-      { type: 'plain_text', name: 'u', text: 选项.uuid },
+      { type: 'plain_text', name: UUID变量名, text: 选项.uuid },
       { type: 'kv_namespace', name: 绑定名, namespace_id: 选项.kvId }
     ]
   };
@@ -283,7 +273,7 @@ async function 部署Worker(凭据, 选项, 记录) {
 }
 
 async function 同步Worker代码(凭据, 选项, 记录) {
-  const 代码 = await 读取源代码(选项.sourceMode);
+  const 代码 = await 读取源代码();
   const 设置 = await 读取Worker设置(凭据, 选项.accountId, 选项.scriptName);
   const 元数据 = 生成保留Worker元数据(设置);
   const 表单 = new FormData();
@@ -334,7 +324,7 @@ async function 部署Pages(凭据, 选项, 记录) {
   const 项目 = await 创建或更新Pages项目(凭据, 选项, 记录);
   const 临时目录 = await mkdtemp(join(tmpdir(), 'deploy-panel-pages-'));
   try {
-    const 代码 = await 读取源代码(选项.sourceMode);
+    const 代码 = await 读取源代码();
     await writeFile(join(临时目录, '_worker.js'), 代码, 'utf8');
     await writeFile(join(临时目录, 'index.html'), '<!doctype html><meta charset="utf-8"><title>Deploy</title>', 'utf8');
     await writeFile(join(临时目录, 'wrangler.toml'), 生成PagesWrangler(选项), 'utf8');
@@ -367,7 +357,7 @@ async function 同步Pages代码(凭据, 选项, 记录) {
   }
   const 临时目录 = await mkdtemp(join(tmpdir(), 'deploy-panel-pages-update-'));
   try {
-    const 代码 = await 读取源代码(选项.sourceMode);
+    const 代码 = await 读取源代码();
     await writeFile(join(临时目录, '_worker.js'), 代码, 'utf8');
     记录('Pages 更新模式未写入 wrangler.toml，不修改 KV/变量/域名配置');
     const 输出 = await 运行Wrangler([
@@ -395,7 +385,7 @@ compatibility_date = "${兼容日期}"
 pages_build_output_dir = "."
 
 [vars]
-u = "${选项.uuid}"
+${UUID变量名} = "${选项.uuid}"
 
 [[kv_namespaces]]
 binding = "${绑定名}"
@@ -436,7 +426,7 @@ function 生成Pages配置(选项) {
   const 单项 = {
     compatibility_date: 兼容日期,
     env_vars: {
-      u: { type: 'plain_text', value: 选项.uuid }
+      [UUID变量名]: { type: 'plain_text', value: 选项.uuid }
     },
     kv_namespaces: {
       [绑定名]: { namespace_id: 选项.kvId }
@@ -451,7 +441,7 @@ function 合并Pages配置(已有, 选项) {
     输出[名称] = 输出[名称] || {};
     输出[名称].compatibility_date = 兼容日期;
     输出[名称].env_vars = 输出[名称].env_vars || {};
-    输出[名称].env_vars.u = { type: 'plain_text', value: 选项.uuid };
+    输出[名称].env_vars[UUID变量名] = { type: 'plain_text', value: 选项.uuid };
     输出[名称].kv_namespaces = 输出[名称].kv_namespaces || {};
     输出[名称].kv_namespaces[绑定名] = { namespace_id: 选项.kvId };
   }
@@ -481,20 +471,6 @@ async function 获取或创建KV(凭据, accountId, 选项, 记录) {
   });
   记录(`创建 KV: ${标题}`);
   return { ...创建结果, title: 标题, created: true };
-}
-
-async function 初始化KV(凭据, accountId, namespaceId, 记录) {
-  await 调用原始接口(凭据, `/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/c`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    body: '{}'
-  });
-  await 调用原始接口(凭据, `/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/c_ver`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    body: String(Date.now())
-  });
-  记录('KV 已写入初始配置');
 }
 
 async function 启用WorkersDev(凭据, accountId, scriptName) {
@@ -564,9 +540,8 @@ async function 列出绑定域名(凭据, 选项, 记录) {
   }
 }
 
-async function 读取源代码(mode) {
-  const 文件名 = mode === 'plain' ? '明文源吗' : '少年你相信光吗';
-  const 地址 = `${源码远程基础}/${encodeURIComponent(文件名)}?t=${Date.now()}`;
+async function 读取源代码() {
+  const 地址 = `${源码远程基础}/${源码文件}?t=${Date.now()}`;
   try {
     const 响应 = await fetch(地址, {
       headers: {
@@ -580,7 +555,7 @@ async function 读取源代码(mode) {
     return 内容;
   } catch (错误) {
     try {
-      return await readFile(join(源码目录, 文件名), 'utf8');
+      return await readFile(join(源码目录, 源码文件), 'utf8');
     } catch {
       throw new Error(`实时拉取源文件失败: ${错误.message}`);
     }

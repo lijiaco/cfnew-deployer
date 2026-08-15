@@ -150,8 +150,8 @@ async function runDeploy(collector) {
 
 function formatDeployResult(payload, result) {
   if (payload.deployMode === 'update') return `${result.projectName} 代码同步完成`;
-  if (result.domain?.hostname) return `https://${result.domain.hostname}/${result.uuid}`;
-  return `${result.projectName} 部署完成，UUID: ${result.uuid}`;
+  if (result.domain?.hostname) return `https://${result.domain.hostname}/login 部署完成，登录密码(UUID): ${result.uuid}`;
+  return `${result.projectName} 部署完成，登录密码(UUID): ${result.uuid}`;
 }
 
 async function loadResources() {
@@ -188,7 +188,6 @@ function collectQuickPayload() {
     accountId: $('accountId').value,
     deployMode: 'create',
     deployType: 'pages',
-    sourceMode: 'encoded',
     projectName: randomName('edge'),
     uuid: crypto.randomUUID(),
     kvTitle: randomName('store'),
@@ -210,7 +209,6 @@ function collectAdvancedPayload() {
       accountId: $('accountId').value,
       deployMode,
       deployType: $('deployType').value,
-      sourceMode: $('sourceMode').value,
       projectName
     };
   }
@@ -226,7 +224,6 @@ function collectAdvancedPayload() {
     accountId: $('accountId').value,
     deployMode,
     deployType: $('deployType').value,
-    sourceMode: $('sourceMode').value,
     projectName: $('projectName').value.trim() || randomName('edge'),
     uuid: $('uuid').value.trim() || crypto.randomUUID(),
     kvTitle: $('kvTitle').value.trim() || randomName('store'),

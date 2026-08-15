@@ -12,7 +12,7 @@
         <div>
           <p class="eyebrow">Cloudflare 部署软件</p>
           <h1>云端部署器</h1>
-          <p class="summary">填邮箱和 Global API Key，点一次自动完成 Pages、随机 UUID、随机 KV 和随机项目名；域名绑定可选，子域名自动随机。</p>
+          <p class="summary">填邮箱和 Global API Key，点一次自动把 cmliu/edgetunnel 部署为 Pages、随机 UUID、随机 KV 和随机项目名；域名绑定可选，子域名自动随机。</p>
         </div>
         <div class="status-card">
           <span class="status-dot"></span>
@@ -49,7 +49,7 @@
           <div class="panel-head">
             <div>
               <h2>2. 一键部署</h2>
-              <p>默认使用 Pages + 加密/混淆源。域名绑定是可选项，开启后自动生成随机子域名。</p>
+              <p>默认使用 Pages 部署 cmliu/edgetunnel。域名绑定是可选项，开启后自动生成随机子域名。UUID 同时是管理页登录密码。</p>
             </div>
             <button id="backToLogin" class="secondary">返回登录</button>
           </div>
@@ -78,7 +78,7 @@
           <div class="panel-head">
             <div>
               <h2>高级设置</h2>
-              <p>需要指定 Worker、明文源、现有项目或现有 KV 时再展开这里。</p>
+              <p>需要指定 Worker、现有项目或现有 KV 时再展开这里。</p>
             </div>
             <div class="button-group">
               <button id="loadAccounts" class="secondary">刷新账户/域名</button>
@@ -116,13 +116,6 @@
               <select id="deployType">
                 <option value="pages">Pages</option>
                 <option value="worker">Worker</option>
-              </select>
-            </label>
-            <label>
-              <span>部署源</span>
-              <select id="sourceMode">
-                <option value="encoded">加密 / 混淆</option>
-                <option value="plain">明文</option>
               </select>
             </label>
             <label>
