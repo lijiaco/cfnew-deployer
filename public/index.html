@@ -12,12 +12,12 @@
         <div>
           <p class="eyebrow">Cloudflare 部署软件</p>
           <h1>云端部署器</h1>
-          <p class="summary">填邮箱和 Global API Key，点一次自动把 cmliu/edgetunnel 部署为 Pages、随机 UUID、随机 KV 和随机项目名；域名绑定可选，子域名自动随机。</p>
+          <p class="summary">填邮箱和 Global API Key，点一次自动把 cmliu/edgetunnel 部署为 Pages、随机 UUID、随机 KV 和随机项目名；域名绑定可选，子域名自动随机。支持多账号批量部署与批量更新。</p>
         </div>
         <div class="status-card">
           <span class="status-dot"></span>
           <strong>Key 不会持久化</strong>
-          <p>前端不写入本地存储，当前部署器 API 仅用于转发 Cloudflare 请求。</p>
+          <p>默认不写入本地存储；仅批量区勾选「记住账号列表」时明文保存在本浏览器。部署器 API 仅转发 Cloudflare 请求。</p>
         </div>
       </section>
 
@@ -42,6 +42,73 @@
           <button id="loginButton" class="primary">登录并继续</button>
           <div id="loginStatus" class="result">未登录</div>
         </div>
+      </section>
+
+      <section id="batchPage" class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>多账号批量</h2>
+            <p>多个 Cloudflare 账号一次跑完，无需逐个登录。每行一个账号：邮箱:Global API Key（兼容 邮箱----Key、邮箱 Key）。# 开头的行忽略。</p>
+          </div>
+          <div class="button-group">
+            <button id="batchCopy" class="secondary" disabled>复制结果</button>
+          </div>
+        </div>
+        <div class="grid">
+          <label class="span-two">
+            <span>账号列表（每行一个）</span>
+            <textarea id="batchAccounts" rows="5" placeholder="a@example.com:37位GlobalAPIKey&#10;b@example.com----37位GlobalAPIKey"></textarea>
+          </label>
+          <label class="toggle">
+            <input id="batchRemember" type="checkbox" />
+            <span>记住账号列表（明文存本浏览器，公共电脑勿勾）</span>
+          </label>
+        </div>
+        <div class="grid three">
+          <label>
+            <span>批量操作</span>
+            <select id="batchMode">
+              <option value="create">批量新部署</option>
+              <option value="update">批量更新代码</option>
+            </select>
+          </label>
+          <label>
+            <span>部署方式</span>
+            <select id="batchDeployType">
+              <option value="pages">Pages</option>
+              <option value="worker">Worker</option>
+            </select>
+          </label>
+          <label>
+            <span>项目名（新部署留空=每账号随机）</span>
+            <input id="batchProjectName" placeholder="批量更新必填" />
+          </label>
+          <label class="span-two">
+            <span>UUID（统一值，可选）</span>
+            <input id="batchUuid" placeholder="留空自动随机" />
+          </label>
+          <label>
+            <span>ADMIN（统一值，可选）</span>
+            <input id="batchAdmin" placeholder="留空自动随机" />
+          </label>
+          <label>
+            <span>KEY（统一值，可选）</span>
+            <input id="batchKey" placeholder="留空自动随机" />
+          </label>
+          <label class="toggle">
+            <input id="batchIndependent" type="checkbox" checked />
+            <span>各账号独立随机 UUID/ADMIN/KEY</span>
+          </label>
+          <label class="toggle">
+            <input id="batchWorkersDev" type="checkbox" />
+            <span>Worker 模式启用 workers.dev</span>
+          </label>
+          <p id="batchHint" class="form-note span-two">批量新部署：账号并行执行、互不影响；未绑定自定义域名，使用 pages.dev / workers.dev 地址。</p>
+        </div>
+        <section class="action-row">
+          <button id="batchDeploy" class="primary">开始批量</button>
+          <div id="batchResult" class="result">等待批量任务</div>
+        </section>
       </section>
 
       <section id="deployPage" class="page-hidden">

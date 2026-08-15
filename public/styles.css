@@ -227,9 +227,24 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: rgba(15, 118, 110, 0.72);
   box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+textarea {
+  width: 100%;
+  min-height: 120px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.86);
+  outline: none;
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
 }
 
 .toggle {

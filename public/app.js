@@ -1,5 +1,8 @@
 const $ = id => document.getElementById(id);
 
+const BATCH_STORAGE_KEY = 'deployer-batch-accounts';
+let lastBatchLines = [];
+
 const state = {
   loggedIn: false,
   accounts: [],
@@ -38,6 +41,17 @@ $('quickZone').addEventListener('change', updateQuickDomainPreview);
 $('clearLogs').addEventListener('click', () => {
   $('logs').textContent = '';
 });
+
+$('batchDeploy').addEventListener('click', runBatchDeploy);
+$('batchMode').addEventListener('change', syncBatchMode);
+$('batchCopy').addEventListener('click', copyBatchResults);
+
+const savedBatchAccounts = localStorage.getItem(BATCH_STORAGE_KEY);
+if (savedBatchAccounts) {
+  $('batchAccounts').value = savedBatchAccounts;
+  $('batchRemember').checked = true;
+}
+syncBatchMode();
 
 $('accountId').addEventListener('change', async () => {
   if ($('accountId').value) await loadResources();
@@ -152,6 +166,147 @@ function formatDeployResult(payload, result) {
   if (payload.deployMode === 'update') return `${result.projectName} 代码同步完成`;
   const 地址 = result.domain?.hostname ? `https://${result.domain.hostname}/login` : `${result.projectName}.pages.dev/login`;
   return `${地址} 部署完成，登录密码(ADMIN): ${result.admin}，节点 UUID: ${result.uuid}`;
+}
+
+async function runBatchDeploy() {
+  const accounts = parseAccounts($('batchAccounts').value);
+  if (!accounts.length) {
+    setBatchResult('账号列表为空或格式无效（每行：邮箱:GlobalAPIKey）', 'error');
+    return;
+  }
+  const updating = $('batchMode').value === 'update';
+  const deployType = $('batchDeployType').value;
+  const projectName = $('batchProjectName').value.trim();
+  if (updating && !projectName) {
+    setBatchResult('批量更新需要填写所有账号共用的项目名', 'error');
+    return;
+  }
+  if ($('batchRemember').checked) localStorage.setItem(BATCH_STORAGE_KEY, $('batchAccounts').value);
+  else localStorage.removeItem(BATCH_STORAGE_KEY);
+
+  const independent = $('batchIndependent').checked;
+  const shared = {};
+  if (!independent) {
+    for (const [id, field] of [['batchUuid', 'uuid'], ['batchAdmin', 'admin'], ['batchKey', 'key']]) {
+      const value = $(id).value.trim();
+      if (value) shared[field] = value;
+    }
+  }
+
+  lastBatchLines = [];
+  const summary = [];
+  let done = 0;
+  setBusy(true);
+  log(`批量任务开始：${accounts.length} 个账号，${updating ? '更新代码' : '新部署'}（${deployType}）`);
+  try {
+    for (const group of chunk(accounts, 3)) {
+      await Promise.all(group.map(async account => {
+        const payload = {
+          credentials: { email: account.email, key: account.key },
+          deployType,
+          projectName: updating ? projectName : (projectName || randomName('edge'))
+        };
+        if (updating) {
+          payload.deployMode = 'update';
+        } else {
+          payload.kvTitle = randomName('store');
+          Object.assign(payload, shared);
+          if (deployType === 'worker') payload.enableWorkersDev = $('batchWorkersDev').checked;
+        }
+        try {
+          const result = await post('/api/deploy', payload);
+          const line = updating
+            ? `${result.projectName} 代码同步完成`
+            : `${batchUrl(result, deployType)} 部署完成`;
+          const detail = updating ? '' : ` ADMIN:${result.admin} UUID:${result.uuid}`;
+          summary.push({ ok: true, email: account.email });
+          lastBatchLines.push(updating
+            ? `${account.email}|${result.projectName}|已更新`
+            : `${batchUrl(result, deployType)}|${result.uuid}|${result.admin}|${result.key}`);
+          log(`✅ [${account.email}] ${line}${detail}`);
+        } catch (error) {
+          summary.push({ ok: false, email: account.email });
+          lastBatchLines.push(`${account.email}|失败|${error.message}`);
+          log(`❌ [${account.email}] ${error.message}`);
+        }
+        done += 1;
+        const okCount = summary.filter(item => item.ok).length;
+        setBatchResult(`批量进行中 ${done}/${accounts.length}：成功 ${okCount}，失败 ${done - okCount}`);
+      }));
+    }
+    const okCount = summary.filter(item => item.ok).length;
+    const failCount = accounts.length - okCount;
+    setBatchResult(`批量完成：成功 ${okCount}，失败 ${failCount}（详情见日志，可复制结果）`, failCount ? '' : 'success');
+    log(`批量任务完成：成功 ${okCount}，失败 ${failCount}`);
+  } finally {
+    setBusy(false);
+    $('batchCopy').disabled = lastBatchLines.length === 0;
+  }
+}
+
+function parseAccounts(text) {
+  const seen = new Set();
+  const out = [];
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    let email = '';
+    let key = '';
+    const strict = line.match(/^([^\s:@：]+@[^\s:@：]+)\s*(?:----|:|：|,|，|\s)\s*([A-Za-z0-9_-]{20,})$/);
+    if (strict) {
+      email = strict[1];
+      key = strict[2];
+    } else {
+      const parts = line.split(/----|:|：|,|，|\s+/).filter(Boolean);
+      if (parts.length === 2 && parts[0].includes('@')) {
+        email = parts[0];
+        key = parts[1];
+      }
+    }
+    if (email && key && !seen.has(email)) {
+      seen.add(email);
+      out.push({ email, key });
+    }
+  }
+  return out;
+}
+
+function chunk(list, size) {
+  const groups = [];
+  for (let i = 0; i < list.length; i += size) groups.push(list.slice(i, i + size));
+  return groups;
+}
+
+function batchUrl(result, deployType) {
+  if (result.domain?.hostname) return `https://${result.domain.hostname}/login`;
+  return deployType === 'worker'
+    ? `${result.projectName}（workers.dev 地址见控制台）`
+    : `${result.projectName}.pages.dev/login`;
+}
+
+function syncBatchMode() {
+  const updating = $('batchMode').value === 'update';
+  $('batchHint').textContent = updating
+    ? '批量更新：按项目名给每个账号同步最新代码，不改动 UUID/ADMIN/KEY/KV/域名；项目不存在的账号计为失败。'
+    : '批量新部署：账号并行执行、互不影响；项目名留空则每账号随机；勾选「独立随机」时每账号各自生成 UUID/ADMIN/KEY。';
+  for (const id of ['batchUuid', 'batchAdmin', 'batchKey', 'batchIndependent', 'batchWorkersDev']) {
+    $(id).disabled = updating;
+  }
+}
+
+async function copyBatchResults() {
+  if (!lastBatchLines.length) return;
+  try {
+    await navigator.clipboard.writeText(lastBatchLines.join('\n'));
+    setBatchResult('结果已复制到剪贴板', 'success');
+  } catch {
+    setBatchResult('复制失败，请从日志手动复制', 'error');
+  }
+}
+
+function setBatchResult(text, type = '') {
+  $('batchResult').textContent = text;
+  $('batchResult').className = `result ${type}`.trim();
 }
 
 async function loadResources() {
